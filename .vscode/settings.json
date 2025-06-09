@@ -1,6 +1,0 @@
-{
-    "files.exclude": {
-        "**/gamelogs_dev/frames": true,
-        "**/gamelogs_full/frames": true
-    }
-}

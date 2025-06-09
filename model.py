@@ -7,8 +7,8 @@ class GameNGen(nn.Module):
     def __init__(self, model_id: str, timesteps: int):
         super().__init__()
         self.model_id = model_id
-        self.vae = AutoencoderKL.from_pretrained(model_id, subfolder="vae").to("cuda")
-        self.unet = UNet2DConditionModel.from_pretrained(model_id, subfolder="unet").to("cuda")
+        self.vae = AutoencoderKL.from_pretrained(model_id, subfolder="vae")
+        self.unet = UNet2DConditionModel.from_pretrained(model_id, subfolder="unet")
         self.scheduler = DDPMScheduler.from_pretrained(model_id, subfolder="scheduler")
         self.scheduler.set_timesteps(timesteps)
 
