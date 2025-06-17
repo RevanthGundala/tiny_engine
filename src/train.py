@@ -1,5 +1,5 @@
 from tqdm import tqdm
-from model import GameNGen
+from model import GameNGen, ActionEncoder, ImageProj
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -15,6 +15,7 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 from accelerate import Accelerator
 from huggingface_hub import hf_hub_download
 import cv2
+from peft import LoraConfig
 
 class NextFrameDataset(Dataset):
     def __init__(self, metadata_path: str, video_path: str, image_size: tuple):
@@ -99,14 +100,24 @@ def train():
 
     num_actions = len(dataset[0]["action"])
     cross_attention_dim = engine.unet.config.cross_attention_dim 
-    action_encoder = nn.Sequential(
-        nn.Linear(in_features=num_actions, out_features=cross_attention_dim),
-        nn.SiLU(inplace=True),
-        nn.Linear(in_features=cross_attention_dim, out_features=cross_attention_dim)
-    )
-    image_proj = nn.Linear(engine.vae.config.latent_channels, cross_attention_dim)
+    action_encoder = ActionEncoder(num_actions, cross_attention_dim)
+    image_proj = ImageProj(engine.vae.config.latent_channels, cross_attention_dim)
 
-    params_to_train = list(engine.unet.parameters()) + list(action_encoder.parameters()) + list(image_proj.parameters())
+    if config.use_lora:
+        engine.unet.requires_grad_(False)
+        lora_config = LoraConfig(
+            r=config.lora_rank,
+            lora_alpha=config.lora_alpha,
+            target_modules=["to_q", "to_k", "to_v", "to_out.0"],
+            lora_dropout=0.1,
+            bias="lora_only",
+        )
+        engine.unet.add_adapter(lora_config)
+        lora_layers = filter(lambda p: p.requires_grad, engine.unet.parameters())
+        params_to_train = list(lora_layers) + list(action_encoder.parameters()) + list(image_proj.parameters())
+    else:
+        params_to_train = list(engine.unet.parameters()) + list(action_encoder.parameters()) + list(image_proj.parameters())
+    
     optim = torch.optim.AdamW(params=params_to_train, lr=config.learning_rate)
 
     lr_scheduler = get_cosine_schedule_with_warmup(
@@ -169,11 +180,15 @@ def train():
         # --- Save Model Checkpoint ---
         if accelerator.is_main_process:
             os.makedirs(config.output_dir, exist_ok=True)
-            unet_save_path = os.path.join(config.output_dir, f"unet_epoch_{epoch}.pth")
+            if config.use_lora:
+                unet_save_path = os.path.join(config.output_dir, f"unet_lora_epoch_{epoch}.pth")
+                accelerator.unwrap_model(engine.unet).save_lora_weights(unet_save_path)
+            else:
+                unet_save_path = os.path.join(config.output_dir, f"unet_epoch_{epoch}.pth")
+                accelerator.save(accelerator.unwrap_model(engine).unet.state_dict(), unet_save_path)
             action_encoder_save_path = os.path.join(config.output_dir, f"action_encoder_epoch_{epoch}.pth")
             image_proj_save_path = os.path.join(config.output_dir, f"image_proj_epoch_{epoch}.pth")
             
-            accelerator.save(accelerator.unwrap_model(engine).unet.state_dict(), unet_save_path)
             accelerator.save(accelerator.unwrap_model(action_encoder).state_dict(), action_encoder_save_path)
             accelerator.save(accelerator.unwrap_model(image_proj).state_dict(), image_proj_save_path)
             logging.info(f"Saved model checkpoints for epoch {epoch}")

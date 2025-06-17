@@ -25,4 +25,24 @@ class GameNGen(nn.Module):
 
         return noise_pred
 
+class ActionEncoder(nn.Module):
+    def __init__(self, num_actions: int, cross_attention_dim: int):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(in_features=num_actions, out_features=cross_attention_dim),
+            nn.SiLU(inplace=True),
+            nn.Linear(in_features=cross_attention_dim, out_features=cross_attention_dim)
+        )
+
+    def forward(self, x):
+        return self.encoder(x)
+
+class ImageProj(nn.Module):
+    def __init__(self, latent_channels: int, cross_attention_dim: int):
+        super().__init__()
+        self.proj = nn.Linear(latent_channels, cross_attention_dim)
+
+    def forward(self, x):
+        return self.proj(x)
+
 
