@@ -1,5 +1,7 @@
 # Tiny Engine
 
+Currently WIP
+
 This project uses a generative model to predict the next frame of a game based on the current frame and a player's action. It's served via a FastAPI backend and includes an interactive Next.js frontend.
 
 ## Setup and Installation
@@ -30,25 +32,6 @@ This project uses `uv` for Python package management.
     ```bash
     uv pip install --find-links https://download.pytorch.org/whl/cpu -e .
     ```
-
-## Running the Application
-
-You need to run the backend and frontend servers in two separate terminals.
-
-**1. Start the Backend Server**:
-
-Make sure your virtual environment is activated.
-
-```bash
-uv run python app.py
-```
-The backend will be available at `http://localhost:8000`.
-
-**2. Start the Frontend Server**:
-
-In a new terminal, navigate to the `frontend` directory.
-
-```bash
 cd frontend
 npm install
 npm run dev
