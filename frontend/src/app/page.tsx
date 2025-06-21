@@ -136,13 +136,13 @@ export default function Home() {
          <p className="mt-4 text-gray-400">Last action: <span className="font-bold text-green-400">{lastAction}</span></p>
       </div>
 
-      <div className="mt-8 text-center text-gray-500">
+      <div className="mt-8 text-center text-gray-400 text-md">
         <p>
           Follow the project on{' '}
           <a href="https://github.com/RevanthGundala/tiny_engine" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
             GitHub
           </a>{' '}
-          and subscribe to the{' '}
+          and checkout the blog post on{' '}
           <a href="https://rgundal2.substack.com/p/diffusion-models-are-game-engines" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:underline">
             Substack
           </a>
