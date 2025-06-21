@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -21,8 +22,12 @@ export default function Home() {
       }
       const data = await response.json();
       setFrame(`data:image/png;base64,${data.frame}`);
-    } catch (e: any) {
-      setError(`Failed to fetch initial frame: ${e.message}`);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setError(`Failed to fetch initial frame: ${e.message}`);
+      } else {
+        setError('An unknown error occurred during initial frame fetch.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -55,8 +60,12 @@ export default function Home() {
 
       const data = await response.json();
       setFrame(`data:image/png;base64,${data.next_frame}`);
-    } catch (e: any) {
-      setError(`Failed to predict next frame: ${e.message}`);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setError(`Failed to predict next frame: ${e.message}`);
+      } else {
+        setError('An unknown error occurred during frame prediction.');
+      }
     } finally {
       isLoadingFrame.current = false;
     }
@@ -93,7 +102,7 @@ export default function Home() {
               <p>Loading game...</p>
             </div>
           ) : frame ? (
-            <img src={frame} alt="Game frame" className="w-full h-full object-contain" />
+            <Image src={frame} alt="Game frame" fill className="object-contain" />
           ) : (
             <div className="flex items-center justify-center h-full">
               <p>Could not load game. Please try again.</p>
@@ -125,6 +134,20 @@ export default function Home() {
             <div className="col-span-3 p-3 bg-gray-700 rounded-md">Arrow Keys - Turn</div>
         </div>
          <p className="mt-4 text-gray-400">Last action: <span className="font-bold text-green-400">{lastAction}</span></p>
+      </div>
+
+      <div className="mt-8 text-center text-gray-500">
+        <p>
+          Follow the project on{' '}
+          <a href="https://github.com/RevanthGundala/tiny_engine" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+            GitHub
+          </a>{' '}
+          and subscribe to the{' '}
+          <a href="https://rgundal2.substack.com/p/diffusion-models-are-game-engines" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:underline">
+            Substack
+          </a>
+          .
+        </p>
       </div>
     </main>
   );
