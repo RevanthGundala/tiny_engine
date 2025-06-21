@@ -1,0 +1,7 @@
+# Ignore everything in the build context by default
+**/*
+
+# Now, un-ignore the files we actually need in the context.
+# The paths are relative to this .dockerignore file.
+!Dockerfile.azure
+!tiny_engine_env.yml

@@ -1,0 +1,79 @@
+Metadata-Version: 2.4
+Name: tiny-engine
+Version: 0.1.0
+Author-email: Revanth Gundala <revanth.gundala@gmail.com>
+Requires-Python: <3.13,>=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: torch@ https://download.pytorch.org/whl/cpu/torch-2.3.1%2Bcpu-cp312-cp312-linux_x86_64.whl
+Requires-Dist: torchvision@ https://download.pytorch.org/whl/cpu/torchvision-0.18.1%2Bcpu-cp312-cp312-linux_x86_64.whl
+Requires-Dist: vizdoom<2.0.0,>=1.2.3
+Requires-Dist: pandas<3.0.0,>=2.2.0
+Requires-Dist: opencv-python>=4.8.0
+Requires-Dist: pillow<11.0.0,>=10.3.0
+Requires-Dist: diffusers<0.28.0,>=0.27.2
+Requires-Dist: stable-baselines3[extra]<3.0.0,>=2.3.0
+Requires-Dist: transformers<5.0.0,>=4.40.0
+Requires-Dist: accelerate<0.30.0,>=0.29.0
+Requires-Dist: tqdm<5.0.0,>=4.66.0
+Requires-Dist: peft<0.11.0,>=0.10.0
+Requires-Dist: huggingface-hub<0.23.0,>=0.22.0
+Requires-Dist: fastapi>=0.111.0
+Requires-Dist: uvicorn[standard]>=0.29.0
+Requires-Dist: python-multipart>=0.0.9
+
+# Tiny Engine
+
+This project uses a generative model to predict the next frame of a game based on the current frame and a player's action. It's served via a FastAPI backend and includes an interactive Next.js frontend.
+
+## Setup and Installation
+
+This project uses `uv` for Python package management.
+
+1.  **Install `uv`**:
+    If you don't have `uv` installed, follow the official installation instructions:
+    ```bash
+    # For macOS and Linux:
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+
+2.  **Create a Virtual Environment**:
+    ```bash
+    uv venv
+    ```
+    This will create a `.venv` directory in your project folder.
+
+3.  **Activate the Virtual Environment**:
+    ```bash
+    # For macOS and Linux:
+    source .venv/bin/activate
+    ```
+
+4.  **Install Python Dependencies**:
+    Install the required packages, including PyTorch from its specific download source.
+    ```bash
+    uv pip install --find-links https://download.pytorch.org/whl/cpu -e .
+    ```
+
+## Running the Application
+
+You need to run the backend and frontend servers in two separate terminals.
+
+**1. Start the Backend Server**:
+
+Make sure your virtual environment is activated.
+
+```bash
+uv run python app.py
+```
+The backend will be available at `http://localhost:8000`.
+
+**2. Start the Frontend Server**:
+
+In a new terminal, navigate to the `frontend` directory.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+The frontend will be available at `http://localhost:3000`. You can now open this URL in your browser to play the game.

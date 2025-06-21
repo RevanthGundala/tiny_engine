@@ -1,0 +1,34 @@
+# ----- CORRECTED VERSION -----
+name: tiny-engine-env
+channels:
+  - pytorch
+  - nvidia # Added this channel for CUDA
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  
+  # These lines will install the correct GPU-enabled versions
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1 # This is the key for GPU support
+
+  # All other packages go under pip
+  - pip:
+    - vizdoom>=1.2.3,<2.0.0
+    - pandas>=2.2.0,<3.0.0
+    - opencv-python>=4.8.0
+    - pillow>=10.3.0,<11.0.0
+    - diffusers>=0.27.2,<0.28.0
+    - stable-baselines3[extra]>=2.3.0,<3.0.0
+    - transformers>=4.40.0,<5.0.0
+    - accelerate>=0.29.0,<0.30.0
+    - tqdm>=4.66.0,<5.0.0
+    - peft>=0.10.0,<0.11.0
+    - huggingface-hub>=0.22.0,<0.23.0
+    - fastapi>=0.111.0
+    - uvicorn[standard]>=0.29.0
+    - python-multipart>=0.0.9
+    - azure-ai-ml>=1.15.0
+    - azure-identity>=1.16.0
+    - mlflow>=2.12.0

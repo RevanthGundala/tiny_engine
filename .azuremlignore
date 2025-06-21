@@ -1,0 +1,7 @@
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore local test data or outputs if you have any
+data/
+outputs/

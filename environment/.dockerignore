@@ -1,0 +1,6 @@
+# Ignore everything
+**/*
+
+# Except for these specific files
+!Dockerfile.azure
+!tiny_engine_env.yml

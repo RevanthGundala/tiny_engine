@@ -1,0 +1,24 @@
+# Start from the same base image you were using
+FROM mcr.microsoft.com/azureml/openmpi3.1.2-ubuntu18.04
+
+# Install all the system-level dependencies that vizdoom needs to build
+RUN apt-get update && apt-get install -y \
+    cmake \
+    libboost-all-dev \
+    libsdl2-dev \
+    libasound2-dev \
+    libjpeg-dev \
+    libgl1-mesa-dev \
+    zlib1g-dev \
+    nasm \
+    g++ \
+    make
+
+# Copy your conda environment file from the build context into the container
+COPY tiny_engine_env.yml /tmp/conda_env.yml
+
+# Create the conda environment from your file
+RUN conda env create -p /azureml-envs/revanth-env -f /tmp/conda_env.yml && \
+    conda clean -aqy && \
+    rm -rf "$HOME/.cache/pip" && \
+    find "/azureml-envs/revanth-env" -type d -name __pycache__ -exec rm -rf {} +
