@@ -18,12 +18,16 @@ custom_env = Environment(
         dockerfile_path="Dockerfile.azure" # This path is relative to 'path'
     ) 
 )
+job_command = """
+source activate /azureml-envs/revanth-env && 
+python train.py --metadata_input ${{inputs.metadata}} --frames_input ${{inputs.frames}}
+"""
 
 # 3. Configure the command to run your training script
 job = command(
     code="./src/",
     # The command is simple, no decompression needed
-    command="python train.py --metadata_input ${{inputs.metadata}} --frames_input ${{inputs.frames}}",
+    command=job_command,
     inputs={
         "metadata": Input(type=AssetTypes.URI_FILE, path="gamelogs/metadata.csv"),
         # Point to the final dataset registered from your sync

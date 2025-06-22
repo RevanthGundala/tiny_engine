@@ -21,7 +21,7 @@ import argparse
 
 
 class NextFrameDataset(Dataset):
-    def __init__(self, metadata_path: str, frames_dir: str, image_size: tuple, history_len: int):
+    def __init__(self, num_actions: int, metadata_path: str, frames_dir: str, image_size: tuple, history_len: int):
         self.metadata = pd.read_csv(metadata_path)
         self.frames_dir = frames_dir
         # List files and filter out non-image files if necessary
@@ -29,6 +29,7 @@ class NextFrameDataset(Dataset):
             [f for f in os.listdir(frames_dir) if f.endswith('.png')],
             key=lambda x: int(x.split('_')[1].split('.')[0])
         )
+        self.num_actions = num_actions
         self.total_frames = len(self.frame_files)
         self.history_len = history_len
 
@@ -71,9 +72,9 @@ class NextFrameDataset(Dataset):
         # Get the action that led to the `next_frame`
         action_row = self.metadata.iloc[actual_idx]
         action_data = json.loads(str(action_row['action']))
-        if not isinstance(action_data, list):
-            action_data = [action_data]
-        curr_action = torch.tensor(action_data, dtype=torch.float32)
+        action_int = int(action_data[0] if isinstance(action_data, list) else action_data)
+        curr_action = torch.zeros(self.num_actions)
+        curr_action[action_int] = 1.0   
 
         return {
             "frame_history": history_tensor,
@@ -84,10 +85,15 @@ class NextFrameDataset(Dataset):
 def train():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--metadata_input", type=str, required=True)
-    parser.add_argument("--frames_input", type=str, required=True)
+    parser = argparse.ArgumentParser(description="GameNGen Finetuning")
+    parser.add_argument("--metadata_input", type=str, required=True, help="Path to the metadata CSV file")
+    parser.add_argument("--frames_input", type=str, required=True, help="Path to the frames directory")
+    parser.add_argument("--experiment_name", type=str, default="GameNGen Finetuning", help="Name of the MLflow experiment.")
     args = parser.parse_args()
+
+    # --- MLflow Integration ---
+    mlflow.set_tracking_uri(os.environ.get("AZUREML_MLFLOW_URI"))
+    mlflow.set_experiment(args.experiment_name)
     
     # --- Setup ---
     accelerator = Accelerator(
@@ -111,7 +117,7 @@ def train():
     # except ImportError:
     #     logging.warning("xformers is not installed. For better memory efficiency, run: pip install xformers")
 
-    dataset = NextFrameDataset(metadata_path, frames_dir, model_config.image_size, history_len=model_config.history_len)
+    dataset = NextFrameDataset(model_config.num_actions, metadata_path, frames_dir, model_config.image_size, history_len=model_config.history_len)
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=train_config.batch_size,
@@ -149,72 +155,71 @@ def train():
 
     # --- MLflow Integration ---
     mlflow.set_experiment("GameNGen Finetuning")
-
+    mlflow.autolog(log_models=False)
+    
     logging.info("Starting training loop...")
-    with mlflow.start_run() as run:
-        mlflow.log_params(vars(model_config))
-        mlflow.log_params(vars(train_config))
-        print(f"MLflow Run ID: {run.info.run_id}")
+    # mlflow.log_params(vars(model_config))
+    # mlflow.log_params(vars(train_config))
 
-        global_step = 0
-        for epoch in range(train_config.num_epochs):
-            progress_bar = tqdm(total=len(dataloader), disable=not accelerator.is_local_main_process)
-            progress_bar.set_description(f"Epoch {epoch}")
-            for batch in dataloader:
-                optim.zero_grad()
-                next_frames, actions, frame_history = batch["next_frame"], batch["action"], batch["frame_history"]
+    global_step = 0
+    for epoch in range(train_config.num_epochs):
+        progress_bar = tqdm(total=len(dataloader), disable=not accelerator.is_local_main_process)
+        progress_bar.set_description(f"Epoch {epoch}")
+        for batch in dataloader:
+            optim.zero_grad()
+            next_frames, actions, frame_history = batch["next_frame"], batch["action"], batch["frame_history"]
 
-                # Encode into latent space
-                with torch.no_grad():
-                    vae = accelerator.unwrap_model(engine).vae
-                    latent_dist = vae.encode(next_frames).latent_dist
-                    clean_latents = latent_dist.sample() * vae.config.scaling_factor
+            # Encode into latent space
+            with torch.no_grad():
+                vae = accelerator.unwrap_model(engine).vae
+                latent_dist = vae.encode(next_frames).latent_dist
+                clean_latents = latent_dist.sample() * vae.config.scaling_factor
 
-                    # Encode history frames
-                    bs, hist_len, C, H, W = frame_history.shape
-                    frame_history = frame_history.view(bs * hist_len, C, H, W)
-                    history_latents = vae.encode(frame_history).latent_dist.sample()
-                    _, latent_C, latent_H, latent_W = history_latents.shape
-                    history_latents = history_latents.view(bs, hist_len * latent_C, latent_H, latent_W)
+                # Encode history frames
+                bs, hist_len, C, H, W = frame_history.shape
+                frame_history = frame_history.view(bs * hist_len, C, H, W)
+                history_latents = vae.encode(frame_history).latent_dist.sample()
+                _, latent_C, latent_H, latent_W = history_latents.shape
+                history_latents = history_latents.reshape(bs, hist_len * latent_C, latent_H, latent_W)
 
-                # Add noise to history latents to prevent drift (noise augmentation)
-                noise_level = 0.1 # Start with a small, fixed amount of noise
-                history_noise = torch.randn_like(history_latents) * noise_level
-                corrupted_history_latents = history_latents + history_noise
+            # Add noise to history latents to prevent drift (noise augmentation)
+            noise_level = 0.1 # Start with a small, fixed amount of noise
+            history_noise = torch.randn_like(history_latents) * noise_level
+            corrupted_history_latents = history_latents + history_noise
 
-                # Conditioning is now only the action
-                action_conditioning = action_encoder(actions)
-                conditioning_batch = action_conditioning.unsqueeze(1)
+            # Conditioning is now only the action
+            action_conditioning = action_encoder(actions)
+            conditioning_batch = action_conditioning.unsqueeze(1)
 
-                # create random noise
-                noise = torch.randn_like(clean_latents)
+            # create random noise
+            noise = torch.randn_like(clean_latents)
 
-                # pick random timestep. High timstep means more noise
-                timesteps = torch.randint(0, engine.scheduler.config.num_train_timesteps, (clean_latents.shape[0], ), device=clean_latents.device).long() 
+            # pick random timestep. High timstep means more noise
+            timesteps = torch.randint(0, engine.scheduler.config.num_train_timesteps, (clean_latents.shape[0], ), device=clean_latents.device).long() 
 
-                noisy_latents = engine.scheduler.add_noise(clean_latents, noise, timesteps)
+            noisy_latents = engine.scheduler.add_noise(clean_latents, noise, timesteps)
 
-                # Concatenate history latents with noisy latents
-                model_input = torch.cat([noisy_latents, corrupted_history_latents], dim=1)
+            # Concatenate history latents with noisy latents
+            model_input = torch.cat([noisy_latents, corrupted_history_latents], dim=1)
 
-                with accelerator.accumulate(engine):
-                    noise_pred = engine(model_input, timesteps, conditioning_batch)
-                    loss = F.mse_loss(noise_pred, noise)
-                    accelerator.backward(loss)
+            with accelerator.accumulate(engine):
+                noise_pred = engine(model_input, timesteps, conditioning_batch)
+                loss = F.mse_loss(noise_pred, noise)
+                accelerator.backward(loss)
 
-                    accelerator.clip_grad_norm_(engine.unet.parameters(), 1.0)
-                    optim.step()
-                    lr_scheduler.step()
+                accelerator.clip_grad_norm_(engine.unet.parameters(), 1.0)
+                optim.step()
+                lr_scheduler.step()
 
-                progress_bar.update(1)
-                logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
-                
-                # Log metrics to MLflow
-                mlflow.log_metric("loss", logs["loss"], step=global_step)
-                mlflow.log_metric("learning_rate", logs["lr"], step=global_step)
+            progress_bar.update(1)
+            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
+            
+            # Log metrics to MLflow
+            # mlflow.log_metric("loss", logs["loss"], step=global_step)
+            # mlflow.log_metric("learning_rate", logs["lr"], step=global_step)
 
-                progress_bar.set_postfix(**logs)
-                global_step += 1
+            progress_bar.set_postfix(**logs)
+            global_step += 1
             
         # --- Save Model Artifacts to MLflow ---
         if accelerator.is_main_process:
@@ -229,11 +234,12 @@ def train():
                 lora_save_path = "unet_lora_weights"
                 os.makedirs(lora_save_path, exist_ok=True)
                 unwrapped_unet.save_lora_weights(lora_save_path)
-                mlflow.log_artifacts(lora_save_path, artifact_path="unet_lora")
+                # mlflow.log_artifacts(lora_save_path, artifact_path="unet_lora")
             else:
-                mlflow.pytorch.log_model(unwrapped_unet, "unet")
+                # mlflow.pytorch.log_model(unwrapped_unet, "unet")
+                pass
             
-            logging.info(f"Saved model artifacts to MLflow Run ID: {run.info.run_id}")
+            # logging.info(f"Saved model artifacts to MLflow Run ID: {mlflow.active_run().info.run_id}")
 
 if __name__ == "__main__":
     train()
